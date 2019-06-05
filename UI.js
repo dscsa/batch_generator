@@ -1,8 +1,9 @@
 function onOpen(e) {
   var ui = SpreadsheetApp.getUi()
   ui.createMenu('V1 Import')
-    .addItem('Queue Batches', 'buildBatchNameList')
+    .addItem('Queue All Batches', 'buildBatchNameList')
     .addItem('Archive "DONE" files', 'cleanOutGenerator')
+    .addItem('Queue Only Current Sheet', 'queueCurrentSheet')
     .addItem('Manually process next batch', 'manualTriggerV1')
     .addToUi();
   ui.createMenu('Generate Batches')

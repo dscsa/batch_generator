@@ -13,7 +13,7 @@ function pharmericaSplit(){
   var uploaded_folder = DriveApp.getFolderById(pharmerica_uploaded());
   
     var backend_sh = SpreadsheetApp.openById(backendSheetID())
-  var transfer_list = getTransferList(backend_sh)
+  //var transfer_list = getTransferList(backend_sh)
 
   
   var sh = SpreadsheetApp.getActiveSpreadsheet();
@@ -72,7 +72,7 @@ function pharmericaSplit(){
           collate_sheet.insertRows(last_full_row+1, copyData.length); //add empty rows
           collate_sheet.getRange(last_full_row+1, 1, copyData.length, copyData[0].length).setValues(copyData);
         
-          scanForTransfers(top_rows, copyData, transfer_list, sh) //before copying in these values, scan them and check if they need to be duplicated, if so, also insert the duplicate batch
+          //scanForTransfers(top_rows, copyData, transfer_list, sh) //before copying in these values, scan them and check if they need to be duplicated, if so, also insert the duplicate batch
         
           time_stamp = Utilities.formatDate(new Date(), "GMT-07:00", "MM/dd/yyyy HH:mm:ss")
           sh.insertSheet('pharmerica_batch_' + time_stamp)
@@ -93,7 +93,7 @@ function pharmericaSplit(){
       var last_full_row = collate_sheet.getLastRow();
       collate_sheet.insertRows(last_full_row+1, copyData.length); //add empty rows
       collate_sheet.getRange(last_full_row+1, 1, copyData.length, copyData[0].length).setValues(copyData);
-      scanForTransfers(top_rows,copyData, transfer_list,sh)
+      //scanForTransfers(top_rows,copyData, transfer_list,sh)
     }
       
     uploaded_folder.addFile(file); //TODO uncomment

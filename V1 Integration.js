@@ -17,6 +17,20 @@ function buildBatchNameList(){
 }
 
 
+
+function queueCurrentSheet(){
+  var sh = SpreadsheetApp.getActiveSpreadsheet()
+  var sheet = sh.getActiveSheet()
+  var sheet_name = sheet.getName()
+  Logger.log(sheet_name)
+  if((sheet_name.indexOf("batch") > -1) && (sheet_name.toLowerCase().indexOf("done") == -1)){
+    sh.getSheetByName('V1 Upload UI').getRange("B2").setValue(sheet_name)
+  } else {
+    throw new Error("Can only queue a 'batch' sheet that isn't 'done'")
+  }
+  
+}
+
 //----------------------------------------Prep & Serve to V1-------------------------------------------------------------------------------------------------
 
 function manualTriggerV1(){ //so that during debugging or in other instances, there's a manual option that overrides the time-restraints
@@ -59,8 +73,8 @@ function triggerV1BatchPull(manual) {
       //Otherwise, line up the next batch and ping V1
       var batches_to_process = params_values[1].toString()
       var new_current = ""
-      batches_to_process = batches_to_process.split(",\n")
-      var new_current = batches_to_process[0]
+      batches_to_process = batches_to_process.split(",")
+      var new_current = batches_to_process[0].trim()
       batches_to_process = batches_to_process.slice(1).join(",\n")
       
       params_range.setValues([[new_current],[batches_to_process],[params_values[2]]])
@@ -121,7 +135,7 @@ function updateSheet(sh,ui_page,batch_name,has_errors){
   
   //Note completion by moving 'current' to 'completed'
   
-  var double_check = params_values[0].toString() == batch_name
+  var double_check = params_values[0].toString().trim() == batch_name.trim()
   
   if(!double_check){
     var error_msg = "ERROR: Received post from V1 that didn't match current batch. OS has been contacted to fix before uploading can proceed. Batch_name: " + params_values[0] + ", received: " + batch_name
@@ -185,8 +199,8 @@ function doPost(e){
   
       } else {
         res_sheet.getRange(1,1,parsed_res.length,parsed_res[0].length).setValues(parsed_res)
-  
       }
+      
       logging_page.appendRow([timestamp,"Errors saved for batch: " + batch_name])
       
     } else { //no errors, log somewhere
