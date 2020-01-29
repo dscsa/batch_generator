@@ -1,117 +1,175 @@
 
 //-----------------------------------V2------------------------------------------------------------------------------------
 
+
+//TODO: decompose this out
 function pullData(){
-  var data = SpreadsheetApp.openById(activeSpreadsheetID()).getSheetByName("V2 UI").getDataRange().getValues()
-  var start = data[1][0]
-  var end = data[1][1]
-  if(!(passes(start) && passes(end))) throw new Error("Dates are invalid. Use YYYY-MM-DD format")
-  pullV2Inventory(start,end)
-}
-
-
-function pullV2Inventory(start,end) {
-  var sh = SpreadsheetApp.openById(activeSpreadsheetID())
-  var backend_sh = SpreadsheetApp.openById(backendSheetID())
-  var ui_page = sh.getSheetByName("V2 UI")
-  var ui_page_data = ui_page.getDataRange().getValues()
+  var sh = SpreadsheetApp.getActiveSpreadsheet()
+  var ui_page = sh.getSheetByName('V2 UI')
+  ui_page.getDataRange().setNumberFormat('@STRING@')
+  var ui_data = ui_page.getDataRange().getValues()
   
-  var todo_list = getTodolist(ui_page_data) //array of tracking numbers to look for
-  var filter_list = buildNameFilterList() //pull from Bertha
-  var name_phone_map = buildMap(backend_sh.getSheetByName("V1 Phone DB Clean").getDataRange().getValues()) //get an object of phone# - facilityname
-  var finished_list = [] //list of tracking nums that we pulled
+  var looking_for = [] //key = number, value = [start,end]
+  var months_to_check = []
   
-  var res = getV2JSON(start,end) //pull from V2
-  var rows = res.rows
-
-  var num_rows = rows.length
-  if(num_rows == 0) throw new Error("No items within that range")
-
-  //needed for naming each sheet & adding appropriate headers
-  var time_stamp = Utilities.formatDate(new Date(), "GMT", "MM-dd-yyyy HH:mm:ss")
-  var raw_name = start + " : " + end + " : " +  time_stamp
-  var headers = ["ndc","qty.to","Drug Name","exp.to","drug.price.goodrx", "drug.price.nadac","drug.price.updatedAt","shipment._id", "shipment.tracking","verifiedAt", "item_last_updated_at"]
-  
-  
-  var counter = 0
-  var new_sheet = sh.insertSheet()  
-  if(parseInt(num_rows) > 2500){
-    new_sheet.setName(raw_name + " PT1")
-    counter = 1
-  } else {
-    new_sheet.setName(raw_name)
+  for(var i = 5; i < ui_data.length; i++){
+    if(ui_data[i][3].toString().trim().length == 0){
+      var track_num = ui_data[i][0].toString().trim()
+      var date = ui_data[i][2].toString().trim()
+      var month = date.split("/")[0]
+      var year = date.split("/")[2]
+      var quasi_month = year + "-" + month
+      if(months_to_check.indexOf(quasi_month) == -1) months_to_check.push(quasi_month)
+      
+      looking_for.push(track_num)
+    }
   }
-  new_sheet.appendRow(headers)
   
+  if(looking_for.length == 0) return;
 
-  var copyData = [] //use this to hold rows until you can append 2400 all at once (significantly increases speed)
-
-  var curr_donation_id = "" //keep track of this so we only make the 2nd api call when necessary
-  var curr_tracking_num = ""
-  var counter = 0
-  for(var i = 0; i < rows.length; i++){
+  var rows_to_upload = []
+  var row_counter = 0 //if this hits 2500, then shift
   
-    if((counter > 0) && (counter % 2400 == 0)){
+  var finished_list = []
+  
+  var time_stamp = Utilities.formatDate(new Date(), "GMT", "MM-dd-yyyy HH:mm:ss")
+  var sheet_name = "V2 batch: " + time_stamp
+  var sheet = sh.insertSheet(sheet_name)
+  sheet.appendRow(["ndc","qty.to","Drug Name","exp.to","drug.price.goodrx", "drug.price.nadac","drug.price.updatedAt","shipment._id", "shipment.tracking","verifiedAt", "item_last_updated_at"])
+  
+  for(var n = 0; n< months_to_check.length; n++){
+  
+    var range = getDateBoundArray(months_to_check[n])
+    var res = getV2JSON(range[0],range[1])
     
-      var last_full_row = new_sheet.getLastRow();
-      new_sheet.insertRows(last_full_row+1, copyData.length); //add empty rows
-      new_sheet.getRange(last_full_row+1, 1, copyData.length, copyData[0].length).setValues(copyData);    
-      copyData = []
-      
-      //move on to the next sheet because we've reached row limit here
-      new_sheet = sh.insertSheet()
-      counter += 1
-      new_sheet.setName(raw_name + " PT" + counter)
-      new_sheet.appendRow(headers)
-      
+    var rows = res.rows
+    var ids = []
+    
+    for(var j = 0; j < rows.length; j++){
+      if(! (~ ids.indexOf(rows[j].doc.shipment._id))) ids.push(rows[j].doc.shipment._id)
+    }
+        
+    var numbers = {}
+    var ids_we_check = []
+    
+    for(var i = 0; i < ids.length; i++){
+      var num = getTrackingNum(ids[i])
+      if(~ looking_for.indexOf(num)){
+        ids_we_check.push(ids[i])
+        numbers[ids[i]] = num
+      }
     }
     
-    //for every item, build a row with what we need
-    if(typeof rows[i] !== "undefined"){
-      var item = rows[i].doc
-      if(item.shipment._id != curr_donation_id){
-        curr_donation_id = item.shipment._id
-        curr_tracking_num = getTrackingNum(curr_donation_id)
-        if(!(curr_donation_id.split(".")[2] in name_phone_map)){ //then this'd be an issue down the line
+    var to_save = []
+    
+    for(var i = 0; i < rows.length; i++){
+    
+      var id = rows[i].doc.shipment._id
+      
+      if(~ ids_we_check.indexOf(id)){
+      
+        if(rows_to_upload.length > 2400){ //then save the current batch and refresh all the necessary variables
+            addRows(sheet,rows_to_upload)
+            
+            for(var j = 0; j < ui_data.length;j++){
+                if(finished_list.indexOf(ui_data[j][0].toString().trim()) > -1){
+                  ui_page.getRange((j+1), 4).setValue(time_stamp)
+                }
+            }
+            
+            finished_list = []
+            rows_to_upload = []
+                     
+            time_stamp = Utilities.formatDate(new Date(), "GMT", "MM-dd-yyyy HH:mm:ss")
+            sheet_name = "V2 batch: " + time_stamp
+            sheet = sh.insertSheet(sheet_name)
+            sheet.appendRow(["ndc","qty.to","Drug Name","exp.to","drug.price.goodrx", "drug.price.nadac","drug.price.updatedAt","shipment._id", "shipment.tracking","verifiedAt", "item_last_updated_at"])
         }
-      }
-      if(todo_list.indexOf(curr_tracking_num) > -1){ //only add rows for ones in our todo list
-        if(finished_list.indexOf(curr_tracking_num) == -1) finished_list.push(curr_tracking_num)
+        
+        var tracking = numbers[id]
+        var item = rows[i].doc
+        
         var ndc_raw = item.drug._id.split("-") //get the label (must be 5digit) and prod (must be 4digit), so pad both
         var ndc = ("00000" + ndc_raw[0]).slice(-5) + ("0000" + ndc_raw[1]).slice(-4)
         var prices = item.drug.price
-        Logger.log(item.bin)
-        Logger.log(item.next)
+  
         var verified = ""
         if(!((item.bin) && (item.bin.length > 0))){ //if theres no bin, then it was destroyred and we want the timestamp
-          if(item.next.length > 0){
-            verified = item.next[0].createdAt
-          }
+            if(item.next.length > 0){
+              verified = item.next[0].disposed ? item.next[0].disposed._id : ''
+            }
         } 
-        copyData.push([ndc,item.qty.to,item.drug.generic,item.exp.to, prices.goodrx ? prices.goodrx : "", prices.nadac ? prices.nadac : "",prices.updatedAt ? prices.updatedAt : "", item.shipment._id, curr_tracking_num, verified, item.updatedAt])
-        counter += 1
+         //use the direct appendrow if you're doing something manually to cathc errors
+        rows_to_upload.push([ndc,item.qty.to,item.drug.generic,item.exp.to, prices.goodrx ? prices.goodrx : "", prices.nadac ? prices.nadac : "",prices.updatedAt ? prices.updatedAt : "", item.shipment._id, tracking.toString(), verified, item.updatedAt])
+        finished_list.push(tracking)
+         //to_save.push([ndc,item.qty.to,item.drug.generic,item.exp.to, prices.goodrx ? prices.goodrx : "", prices.nadac ? prices.nadac : "",prices.updatedAt ? prices.updatedAt : "", item.shipment._id, tracking, verified, item.updatedAt])
       }
     }
-    
+  
+    break //this makes it only do one month at a time TODO remove
   }
   
-  //get rid of any straglers in copyData after loop finished
-  if(copyData.length > 0){
-    var last_full_row = new_sheet.getLastRow();
-    new_sheet.insertRows(last_full_row+1, copyData.length); //add empty rows
-    new_sheet.getRange(last_full_row+1, 1, copyData.length, copyData[0].length).setValues(copyData);   
-  }
   
-  Logger.log(finished_list)
-  //mark the ui page for tracking nums found
-  for(var i = 0; i < ui_page_data.length;i++){
-    
-    if(finished_list.indexOf(ui_page_data[i][0].toString().trim()) > -1){
-      ui_page.getRange((i+1), 4).setValue(time_stamp)
-    }
-    
+  if(rows_to_upload.length > 0){ //then save the current batch and refresh all the necessary variables
+      addRows(sheet,rows_to_upload)
+      
+      for(var j = 0; j < ui_data.length;j++){
+          if(finished_list.indexOf(ui_data[j][0].toString().trim()) > -1){
+            ui_page.getRange((j+1), 4).setValue(time_stamp)
+          }
+      }
   }
-  
   
   
 }
+
+//for when mistakes happen
+function removeV2Batches(){
+  var sh = SpreadsheetApp.getActiveSpreadsheet()
+  var sheets = sh.getSheets()
+  for(var i = 0; i < sheets.length; i++){
+    if(~ sheets[i].getName().indexOf('V2 batch')){
+    Logger.log(sheets[i].getName())
+      sh.deleteSheet(sheets[i])
+    }
+  }
+}
+
+//Given a date, build an array, with the start of the month and end of date strings
+function getDateBoundArray(quasi_month){  
+  
+  var res = []
+  res.push(quasi_month + "-01")
+  var arr = quasi_month.split("-")
+
+  var month_num = parseInt(arr[1],10)
+  var year_num = parseInt(arr[0],10)
+
+  if(month_num == 12){
+    year_num += 1
+    month_num = 1
+  } else {
+    month_num += 1
+  }
+  
+  month_num = month_num.toString()
+  year_num = year_num.toString()
+
+  if(month_num.length == 1) month_num = "0" + month_num
+  
+  res.push(year_num + "-" + month_num + "-01")
+  return res
+}
+
+
+function addRows(sheet,rows){
+  if(rows.length == 0) return
+  sheet.insertRowsAfter(1, rows.length)
+  sheet.getRange(sheet.getLastRow()+1, 1, rows.length, rows[0].length).setValues(rows)
+}
+
+
+
+
+
+

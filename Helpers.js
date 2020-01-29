@@ -2,7 +2,7 @@ function  getTodolist(ui_data){
   var res = []
   for(var i = 5; i < ui_data.length; i++){
     if(ui_data[i][3].toString().trim().length == 0){
-      res.push(ui_data[i][0])
+      res.push(ui_data[i][0].toString().trim())
     }
   }
   return res

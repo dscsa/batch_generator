@@ -2,7 +2,7 @@
 
 
 //-------------------------------COLEMAN--------------------------------------------------------------------------------------
-
+//Handling the google sheets they build out
 
 
 function process_coleman_rows(file, tracking_num, collate_sheet, error_sheet, old_row, sh,backend_sh){
@@ -56,10 +56,9 @@ function colemanCollate(){
   var uploaded_folder = DriveApp.getFolderById(coleman_finished()); 
   
   var sh = SpreadsheetApp.getActiveSpreadsheet();
-    var backend_sh = SpreadsheetApp.openById(backendSheetID())
+  var backend_sh = SpreadsheetApp.openById(backendSheetID())
 
   var error_sheet = sh.getSheetByName('raw_errors')
-
 
   var files = source_folder.getFilesByType('application/vnd.google-apps.spreadsheet')
   var file_names = [];

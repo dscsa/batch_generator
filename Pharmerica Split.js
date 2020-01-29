@@ -12,7 +12,10 @@ function pharmericaSplit(){
   var source_folder = DriveApp.getFolderById(pharmerica_source()); 
   var uploaded_folder = DriveApp.getFolderById(pharmerica_uploaded());
   
-    var backend_sh = SpreadsheetApp.openById(backendSheetID())
+  convertAllCSVToGSheet(pharmerica_source(), PHARMERICA_CSV) //in case there are any csv's sitting there
+  
+  
+  var backend_sh = SpreadsheetApp.openById(backendSheetID())
   //var transfer_list = getTransferList(backend_sh)
 
   

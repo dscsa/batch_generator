@@ -87,10 +87,12 @@ function triggerV1BatchPull(manual) {
       url += "/" + Utilities.base64EncodeWebSafe(url_a) + "/" + Utilities.base64EncodeWebSafe(url_b)
       try{
         var res = UrlFetchApp.fetch(url,{'muteHttpExceptions':true})  
+        Logger.log("here")
         Logger.log(res)
       } catch(e){
         Logger.log(e)
-        sendAlertEmail("Error or completion on V1 trigger", e)
+        console.log(e)
+        //sendAlertEmail("Error or completion on V1 trigger", e)
       }
   }   
 }
@@ -100,7 +102,10 @@ function triggerV1BatchPull(manual) {
 function doGet(e){
   var batch_name = SpreadsheetApp.openById(activeSpreadsheetID()).getSheetByName("V1 Upload UI").getRange("B1").setNumberFormat("@STRING@").getValue().toString().trim()
   try{
-    var batch_data = JSON.stringify(SpreadsheetApp.openById(activeSpreadsheetID()).getSheetByName(batch_name).getDataRange().getValues())
+    var batch_sheet = SpreadsheetApp.openById(activeSpreadsheetID()).getSheetByName(batch_name)
+    batch_sheet.getDataRange().setNumberFormat('@STRING@')
+    SpreadsheetApp.flush();
+    var batch_data = JSON.stringify(batch_sheet.getDataRange().getValues())
     var params = JSON.stringify({"batch_data": batch_data, "batch_name":batch_name});
   
     return ContentService.createTextOutput(params)
@@ -145,13 +150,17 @@ function updateSheet(sh,ui_page,batch_name,has_errors){
   } else {
     var completed_batches = params_values[2].toString()
     if(completed_batches.trim().length == 0){
-      completed_batches = batch_name +  (has_errors ? " - HAS ERRORS" : "")
+      completed_batches = batch_name +  (has_errors ? " - ERRORS" : "")
     } else {
-      completed_batches += ",\n" + batch_name +  (has_errors ? " - HAS ERRORS" : "")
+      completed_batches += ",\n" + batch_name +  (has_errors ? " - ERRORS" : "")
     }
     params_range.setValues([[""],[params_values[1].toString()],[completed_batches]])
     
     var batch_sheet = sh.getSheetByName(batch_name) //tag a sheet as done so we don't revisit it.
+    
+    if(batch_name.length > 90) batch_name = batch_name.substring(0,90)
+
+    
     batch_sheet.setName("DONE: " + batch_name)
     
   }
@@ -198,6 +207,7 @@ function doPost(e){
         res_sheet.getRange(1,1,parsed_res.length,parsed_res[5].length).setValues(parsed_res)
   
       } else {
+      
         res_sheet.getRange(1,1,parsed_res.length,parsed_res[0].length).setValues(parsed_res)
       }
       

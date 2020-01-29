@@ -1,3 +1,33 @@
+function cleanPolaris(){
+  var sheets = SpreadsheetApp.openById(activeSpreadsheetID()).getSheets()
+  
+  for(var n = 0; n < sheets.length; n++){
+    if(~ sheets[n].getName().toString().toLowerCase().indexOf("ERROR CSV FOR: polaris_")){
+      
+    }
+  }
+
+}
+
+
+function cleanOutUI(){
+
+  var sh = SpreadsheetApp.openById(activeSpreadsheetID())
+  var backend_sh = SpreadsheetApp.openById(backendSheetID())
+  var archive_page = backend_sh.getSheetByName('batch name archive')
+  var ui_page = sh.getSheetByName('V1 Upload UI')
+  
+  var finished_batches = ui_page.getRange("B3").getValue().split(",") //TODO make this B3
+  Logger.log(finished_batches)
+  for(var i = 0; i < finished_batches.length; i++){
+    archive_page.appendRow([finished_batches[i]])
+  }
+  
+  ui_page.getRange("B3").setValue('')
+  
+}
+
+
 function cleanOutGenerator() {
   //go through all sheets
   //if tagged done, move them to an archive file
@@ -12,7 +42,7 @@ function cleanOutGenerator() {
   
   for(var i = 0; i < sheets.length; i++){
      var sheet_name = sheets[i].getName()
-      if((sheet_name.indexOf("batch") > -1) && (sheet_name.toLowerCase().indexOf("done") > -1)){
+      if((sheet_name.toLowerCase().indexOf("done") > -1)){
         sheets_to_archive.push(sheets[i])
       }
   }
